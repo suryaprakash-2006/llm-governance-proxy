@@ -1,0 +1,7 @@
+POST http://localhost:8081/detect
+Content-Type: application/json
+
+{
+  "userId": "1",
+  "prompt": "My email is test@gmail.com and password is 1234"
+}
