@@ -1,0 +1,9 @@
+out/
+*.class
+sources.txt
+
+# Python backend artifacts
+backend/__pycache__/
+backend/**/*.pyc
+backend/governance.db
+backend/logs/
