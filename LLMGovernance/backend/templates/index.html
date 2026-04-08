@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LLM Governance System</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <main class="shell">
+    <section class="panel">
+      <h1>LLM Governance System</h1>
+      <p class="sub">Local-only AI with filtering, monitoring, and secure execution</p>
+
+      <label for="prompt">Prompt</label>
+      <textarea id="prompt" placeholder="Enter prompt..."></textarea>
+
+      <div class="btn-row">
+        <button id="askBtn">Ask Local LLM</button>
+        <button id="logsBtn" class="secondary">Refresh Logs</button>
+      </div>
+
+      <h2>Response</h2>
+      <pre id="response" class="output">No response yet.</pre>
+
+      <h2>Detected Entities</h2>
+      <pre id="detected" class="output">None.</pre>
+    </section>
+
+    <section class="panel">
+      <h2>Secure Execution</h2>
+      <p class="sub">Run allowlisted commands only (python, python3, dosbox, echo)</p>
+      <input id="execCmd" type="text" placeholder='Example: ["echo", "hello"]' />
+      <button id="execBtn" class="warn">Execute</button>
+      <pre id="execResult" class="output">Execution output will appear here.</pre>
+
+      <h2>Logs</h2>
+      <pre id="logs" class="output">No logs loaded.</pre>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
