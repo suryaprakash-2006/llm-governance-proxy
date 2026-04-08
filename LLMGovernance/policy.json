@@ -1,0 +1,30 @@
+{
+  "global": {
+    "maskEmail": true,
+    "maskPhone": true,
+    "maxInputLength": 500,
+    "blockedKeywords": [
+      "password",
+      "admin",
+      "system",
+      "root",
+      "token",
+      "api key",
+      "secret",
+      "confidential"
+    ]
+  },
+  "roles": {
+    "ADMIN": {
+      "blockedKeywords": []
+    },
+    "USER": {
+      "blockedKeywords": [
+        "hack",
+        "bypass",
+        "password",
+        "token"
+      ]
+    }
+  }
+}
