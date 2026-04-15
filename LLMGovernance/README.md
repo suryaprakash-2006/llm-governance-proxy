@@ -60,6 +60,8 @@ This system solves that by:
 6. Local LLM integration via Ollama (no paid APIs)  
 7. Centralized audit logging system  
 8. Built-in Log Viewer for monitoring  
+9. SQL-based authentication (ADMIN / USER) with login screen  
+10. Real MySQL tables for users and prompt records  
 
 ---
 
@@ -82,6 +84,7 @@ User Input
 
 - Java (JDK 11+) with Swing UI  
 - Ollama (Local LLM runtime)  
+- MySQL (real relational DB tables via JDBC)  
 - JSON for policy configuration  
 - Java logging utilities  
 - In-memory rate limiting  
@@ -98,6 +101,30 @@ User Input
    ollama pull llama3.2  
 4. Run model:
    ollama run llama3.2  
+5. Internet on first run to download MySQL Connector/J automatically (or place jar manually in `lib/`)  
+
+### MySQL Setup
+
+Create a MySQL database and user, then set these environment variables or Java system properties before running:
+
+- `LLM_DB_HOST` / `llm.db.host` default: `localhost`
+- `LLM_DB_PORT` / `llm.db.port` default: `3306`
+- `LLM_DB_NAME` / `llm.db.name` default: `llm_governance`
+- `LLM_DB_USER` / `llm.db.user` default: `root`
+- `LLM_DB_PASSWORD` / `llm.db.password` default: empty
+
+Example:
+
+```sql
+CREATE DATABASE llm_governance CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+### Login Credentials (Default)
+
+- ADMIN: `admin` / `admin123`  
+- USER: `user` / `user123`  
+
+Credentials are stored in the MySQL `users` table.
 
 ---
 
@@ -115,10 +142,10 @@ User Input
    dir /s /b src\*.java > sources.txt  
 
 2. Compile:
-   javac -d out -sourcepath src @sources.txt  
+   javac -cp "lib/*" -d out -sourcepath src @sources.txt  
 
 3. Run:
-   java -cp out com.llmgovernance.system.main.MainApp  
+   java -cp "out;lib/*" com.llmgovernance.system.main.MainApp  
 
 ---
 
@@ -177,8 +204,6 @@ How it works:
 
 ## 🔮 Future Enhancements
 
-- Authentication system with role management  
-- Database integration (SQLite)  
 - Dynamic policy updates without restart  
 - Web-based monitoring dashboard  
 - Exportable audit reports  

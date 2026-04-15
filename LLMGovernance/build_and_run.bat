@@ -8,6 +8,10 @@ setlocal
 set "PROJECT_DIR=%~dp0"
 set "SRC_DIR=%PROJECT_DIR%src"
 set "OUT_DIR=%PROJECT_DIR%out"
+set "LIB_DIR=%PROJECT_DIR%lib"
+set "MYSQL_JAR=%LIB_DIR%\mysql-connector-j-8.4.0.jar"
+set "SLF4J_API_JAR=%LIB_DIR%\slf4j-api-2.0.13.jar"
+set "SLF4J_SIMPLE_JAR=%LIB_DIR%\slf4j-simple-2.0.13.jar"
 set "MAIN_CLASS=com.llmgovernance.system.main.MainApp"
 
 echo =============================================================
@@ -30,6 +34,39 @@ echo [1/3] Java compiler found:
 javac -version
 echo.
 
+if not exist "%LIB_DIR%" mkdir "%LIB_DIR%"
+if not exist "%MYSQL_JAR%" (
+    echo [INFO] MySQL JDBC driver not found. Downloading...
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -UseBasicParsing -Uri 'https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/8.4.0/mysql-connector-j-8.4.0.jar' -OutFile '%MYSQL_JAR%'"
+    if %ERRORLEVEL% NEQ 0 (
+        echo [ERROR] Failed to download mysql-connector-j jar.
+        echo         Download manually and place at:
+        echo         %MYSQL_JAR%
+        pause
+        exit /b 1
+    )
+)
+
+if not exist "%SLF4J_API_JAR%" (
+    echo [INFO] slf4j-api jar not found. Downloading...
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -UseBasicParsing -Uri 'https://repo1.maven.org/maven2/org/slf4j/slf4j-api/2.0.13/slf4j-api-2.0.13.jar' -OutFile '%SLF4J_API_JAR%'"
+    if %ERRORLEVEL% NEQ 0 (
+        echo [ERROR] Failed to download slf4j-api jar.
+        pause
+        exit /b 1
+    )
+)
+
+if not exist "%SLF4J_SIMPLE_JAR%" (
+    echo [INFO] slf4j-simple jar not found. Downloading...
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -UseBasicParsing -Uri 'https://repo1.maven.org/maven2/org/slf4j/slf4j-simple/2.0.13/slf4j-simple-2.0.13.jar' -OutFile '%SLF4J_SIMPLE_JAR%'"
+    if %ERRORLEVEL% NEQ 0 (
+        echo [ERROR] Failed to download slf4j-simple jar.
+        pause
+        exit /b 1
+    )
+)
+
 :: ── Create output directory ───────────────────────────────────
 if not exist "%OUT_DIR%" mkdir "%OUT_DIR%"
 
@@ -43,7 +80,7 @@ for /r "%SRC_DIR%" %%f in (*.java) do (
 )
 
 :: ── Compile ───────────────────────────────────────────────────
-javac -d "%OUT_DIR%" -sourcepath "%SRC_DIR%" @"%SOURCES_FILE%" 2>&1
+javac -cp "%LIB_DIR%\*" -d "%OUT_DIR%" -sourcepath "%SRC_DIR%" @"%SOURCES_FILE%" 2>&1
 if %ERRORLEVEL% NEQ 0 (
     echo.
     echo [ERROR] Compilation failed. See errors above.
@@ -57,6 +94,6 @@ echo.
 :: ── Run ───────────────────────────────────────────────────────
 echo [3/3] Launching application...
 echo.
-java -cp "%OUT_DIR%" %MAIN_CLASS%
+java -cp "%OUT_DIR%;%LIB_DIR%\*" %MAIN_CLASS%
 
 endlocal

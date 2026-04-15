@@ -7,6 +7,8 @@ package com.llmgovernance.system.model;
 public class Prompt {
 
     private int id;
+    private String userId;
+    private String userRole;
     private String originalText;
     private String filteredText;
     private String compressedText;
@@ -33,6 +35,12 @@ public class Prompt {
 
     public int getId()                         { return id; }
     public void setId(int id)                  { this.id = id; }
+
+    public String getUserId()                  { return userId; }
+    public void setUserId(String userId)       { this.userId = userId; }
+
+    public String getUserRole()                { return userRole; }
+    public void setUserRole(String userRole)   { this.userRole = userRole; }
 
     public String getOriginalText()            { return originalText; }
     public void setOriginalText(String t)      { this.originalText = t; }

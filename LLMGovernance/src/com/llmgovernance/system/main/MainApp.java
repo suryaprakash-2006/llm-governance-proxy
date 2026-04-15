@@ -1,6 +1,7 @@
 package com.llmgovernance.system.main;
 
-import com.llmgovernance.system.ui.MainFrame;
+import com.llmgovernance.system.db.DBConnection;
+import com.llmgovernance.system.ui.LoginFrame;
 import com.llmgovernance.system.util.AppLogger;
 
 import javax.swing.*;
@@ -25,8 +26,11 @@ public class MainApp {
             LOG.info("  Storage : " + System.getProperty("user.home") + "/llm_governance/");
             LOG.info("=================================================");
 
-            MainFrame frame = new MainFrame();
-            frame.setVisible(true);
+            // Ensure DB schema and default users are ready before login.
+            DBConnection.getInstance();
+
+            LoginFrame loginFrame = new LoginFrame();
+            loginFrame.setVisible(true);
         });
     }
 }

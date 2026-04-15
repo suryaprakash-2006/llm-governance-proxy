@@ -167,10 +167,12 @@ public class ReplyService {
         // Step 5: Hash original text
         result.originalHash = HashUtil.sha256(inputText);
 
-        // Step 6: Persist to flat-file DB
+        // Step 6: Persist to SQL DB
         Prompt prompt = new Prompt(
             inputText, result.filteredText, result.compressedText,
             result.originalHash, "", DBConnection.getInstance().now());
+        prompt.setUserId(effectiveUserId);
+        prompt.setUserRole(effectiveRole);
         result.savedId = dao.savePrompt(prompt);
 
         LOG.info("Request processed. Record ID=" + result.savedId

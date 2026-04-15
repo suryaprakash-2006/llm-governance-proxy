@@ -2,6 +2,7 @@ package com.llmgovernance.system.ui;
 
 import com.llmgovernance.system.user.ReplyService;
 import com.llmgovernance.system.user.ReplyService.ProcessResult;
+import com.llmgovernance.system.security.GovernanceEngine;
 
 import javax.swing.*;
 import javax.swing.border.*;
@@ -30,6 +31,8 @@ import java.nio.file.Files;
 public class MainFrame extends JFrame {
 
     private final ReplyService service = new ReplyService();
+    private final String sessionUserId;
+    private final String sessionRole;
 
     // Colours
     private static final Color CLR_BG      = new Color(13,  15,  23);
@@ -54,11 +57,17 @@ public class MainFrame extends JFrame {
     // Widgets
     private JTextArea     taInput, taDetection, taFiltered;
     private JTextArea     taLlmResponse, taGovernance;
-    private JLabel        lblStatus, lblHash, lblRecords, lblApiStatus;
+    private JLabel        lblStatus, lblHash, lblRecords, lblApiStatus, lblRoleBadge;
     private JTextField tfLocalModel;
+    private JButton btnHistory;
+    private JTabbedPane centerTabs;
 
-    public MainFrame() {
+    public MainFrame(String userId, String role) {
         super("LLM Governance System — Local Ollama Mode");
+        this.sessionUserId = (userId == null || userId.isBlank()) ? "anonymous" : userId.trim();
+        this.sessionRole = GovernanceEngine.ROLE_ADMIN.equalsIgnoreCase(role)
+                ? GovernanceEngine.ROLE_ADMIN
+                : GovernanceEngine.ROLE_USER;
         initLAF();
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(1300, 840);
@@ -69,14 +78,59 @@ public class MainFrame extends JFrame {
 
         JPanel north = new JPanel(new BorderLayout());
         north.setOpaque(false);
-        north.add(buildHeader(),    BorderLayout.NORTH);
-        north.add(buildApiKeyBar(), BorderLayout.SOUTH);
+        north.add(buildHeader(), BorderLayout.NORTH);
 
-        add(north,             BorderLayout.NORTH);
+        JPanel topBars = new JPanel(new GridLayout(2, 1));
+        topBars.setOpaque(false);
+        topBars.add(buildAccessBar());
+        topBars.add(buildApiKeyBar());
+        north.add(topBars, BorderLayout.SOUTH);
+
+        add(north,            BorderLayout.NORTH);
         add(buildCenterTabs(), BorderLayout.CENTER);
-        add(buildStatusBar(),  BorderLayout.SOUTH);
+        add(buildStatusBar(), BorderLayout.SOUTH);
 
         updateRecordCount();
+        applyRoleUiMode();
+    }
+
+    private JPanel buildAccessBar() {
+        JPanel bar = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 6));
+        bar.setBackground(new Color(16, 19, 30));
+        bar.setBorder(new MatteBorder(0, 0, 1, 0, CLR_BORDER));
+
+        JLabel roleLabel = new JLabel("Role:");
+        roleLabel.setFont(FONT_LABEL);
+        roleLabel.setForeground(CLR_ACCENT);
+
+        JLabel roleValue = new JLabel(sessionRole);
+        roleValue.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        roleValue.setForeground(CLR_TEXT);
+        roleValue.setBorder(new CompoundBorder(
+            new LineBorder(CLR_BORDER, 1, true),
+            new EmptyBorder(3, 8, 3, 8)));
+
+        JLabel userLabel = new JLabel("Username:");
+        userLabel.setFont(FONT_LABEL);
+        userLabel.setForeground(CLR_ACCENT);
+
+        JLabel userValue = new JLabel(sessionUserId);
+        userValue.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        userValue.setForeground(CLR_TEXT);
+        userValue.setBorder(new CompoundBorder(
+                new LineBorder(CLR_BORDER, 1, true),
+                new EmptyBorder(4, 8, 4, 8)));
+
+        JLabel hint = new JLabel("Logged-in user context is loaded from database authentication.");
+        hint.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+        hint.setForeground(CLR_SUBTEXT);
+
+        bar.add(roleLabel);
+        bar.add(roleValue);
+        bar.add(userLabel);
+        bar.add(userValue);
+        bar.add(hint);
+        return bar;
     }
 
     // ── Look & feel ───────────────────────────────────────────────────────────
@@ -104,8 +158,20 @@ public class MainFrame extends JFrame {
         tag.setFont(new Font("Segoe UI", Font.BOLD, 11));
         tag.setForeground(CLR_FREE);
 
+        lblRoleBadge = new JLabel("USER MODE");
+        lblRoleBadge.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        lblRoleBadge.setOpaque(true);
+        lblRoleBadge.setBorder(new CompoundBorder(
+            new LineBorder(CLR_BORDER, 1, true),
+            new EmptyBorder(3, 8, 3, 8)));
+
         h.add(title, BorderLayout.WEST);
-        h.add(tag,   BorderLayout.EAST);
+
+        JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        right.setOpaque(false);
+        right.add(lblRoleBadge);
+        right.add(tag);
+        h.add(right, BorderLayout.EAST);
         return h;
     }
 
@@ -161,12 +227,14 @@ public class MainFrame extends JFrame {
 
     // ── Main split pane ───────────────────────────────────────────────────────
     private JTabbedPane buildCenterTabs() {
-        JTabbedPane tabs = new JTabbedPane();
-        tabs.addTab("Governance", buildMainPanel());
-        tabs.addTab("Logs", new LogViewerPanel());
-        tabs.setBackground(CLR_PANEL);
-        tabs.setForeground(CLR_TEXT);
-        return tabs;
+        centerTabs = new JTabbedPane();
+        centerTabs.addTab("Governance", buildMainPanel());
+        if (GovernanceEngine.ROLE_ADMIN.equals(selectedRole())) {
+            centerTabs.addTab("Logs", new LogViewerPanel());
+        }
+        centerTabs.setBackground(CLR_PANEL);
+        centerTabs.setForeground(CLR_TEXT);
+        return centerTabs;
     }
 
     private JSplitPane buildMainPanel() {
@@ -216,7 +284,7 @@ public class MainFrame extends JFrame {
         JButton btnAnalyze    = makeButton("🔍 Analyze + Ask Local LLM", CLR_GEMINI);
         JButton btnLoad       = makeButton("📂 Load File",           CLR_SUBTEXT);
         JButton btnClear      = makeButton("🗑️  Clear All",           CLR_SUBTEXT);
-        JButton btnHistory    = makeButton("📋 History",             CLR_SUBTEXT);
+        btnHistory    = makeButton("📋 History",             CLR_SUBTEXT);
 
         row.add(btnAnalyze);
         row.add(btnLoad);
@@ -226,17 +294,19 @@ public class MainFrame extends JFrame {
         // ── ANALYZE ──────────────────────────────────────────────────────────
         btnAnalyze.addActionListener(e -> {
             String text = taInput.getText().trim();
+            String role = selectedRole();
+            String userId = selectedUserId();
             if (text.isEmpty()) {
                 showError("Input is empty. Please type or paste some text first.");
                 return;
             }
             btnAnalyze.setEnabled(false);
             btnAnalyze.setText("⏳ Asking Local LLM...");
-            status("Masking sensitive data -> Sending to local Ollama model...");
+            status("Role=" + role + " | User=" + userId + " | Masking sensitive data -> Sending to local Ollama model...");
 
             SwingWorker<ProcessResult, Void> worker = new SwingWorker<>() {
                 @Override protected ProcessResult doInBackground() throws Exception {
-                    return service.analyze(text);
+                    return service.analyze(text, userId, role);
                 }
                 @Override protected void done() {
                     btnAnalyze.setEnabled(true);
@@ -247,14 +317,16 @@ public class MainFrame extends JFrame {
                         taFiltered   .setText(r.filteredText);
                         taLlmResponse.setText(r.llmResponse);
                         taGovernance  .setText(
-                                "Input policy: " + (r.llmCalled ? "allowed" : "processed") + "\n"
+                            "Role: " + role + "\n"
+                                + "Username: " + userId + "\n"
+                                + "Input policy: " + (r.llmCalled ? "allowed" : "processed") + "\n"
                                         + "Stored record: #" + r.savedId + "\n"
                                         + "Sensitive found: " + (r.sensitiveFound ? "yes" : "no") + "\n"
                                         + "Governance status: active");
                         lblHash.setText("SHA-256: " + r.originalHash.substring(0,16) + "…");
 
                         String llmTag = r.llmCalled ? "✅ Local model responded." : "⚠️ Local model not called.";
-                        status(llmTag + "  |  Record ID=" + r.savedId);
+                        status(llmTag + "  |  Role=" + role + " | Record ID=" + r.savedId);
                         updateRecordCount();
                     } catch (Exception ex) {
                         showError("Pipeline error:\n" + ex.getMessage());
@@ -383,6 +455,48 @@ public class MainFrame extends JFrame {
     private void status(String msg)      { lblStatus.setText(msg); }
     private void showError(String msg)   { JOptionPane.showMessageDialog(this, msg, "Error",   JOptionPane.ERROR_MESSAGE); }
     private void updateRecordCount()     { lblRecords.setText("DB Records: " + service.recordCount()); }
+
+    private void applyRoleUiMode() {
+        String role = selectedRole();
+        boolean isAdmin = GovernanceEngine.ROLE_ADMIN.equals(role);
+
+        if (lblRoleBadge != null) {
+            lblRoleBadge.setText(isAdmin ? "ADMIN MODE" : "USER MODE");
+            lblRoleBadge.setBackground(isAdmin ? new Color(125, 59, 48) : new Color(30, 80, 58));
+            lblRoleBadge.setForeground(isAdmin ? new Color(255, 226, 220) : new Color(214, 255, 232));
+        }
+
+        if (btnHistory != null) {
+            btnHistory.setEnabled(isAdmin);
+            btnHistory.setToolTipText(isAdmin
+                    ? "Admin-only audit history"
+                    : "History is admin-only. Switch role to ADMIN.");
+        }
+
+        if (centerTabs != null) {
+            int logsIndex = centerTabs.indexOfTab("Logs");
+            if (isAdmin && logsIndex < 0) {
+                centerTabs.addTab("Logs", new LogViewerPanel());
+            }
+            if (!isAdmin && logsIndex >= 0) {
+                centerTabs.removeTabAt(logsIndex);
+            }
+        }
+
+        if (lblStatus != null) {
+            status(isAdmin
+                    ? "ADMIN mode active: logs and history enabled."
+                    : "USER mode active: governance tab only.");
+        }
+    }
+
+    private String selectedRole() {
+        return sessionRole;
+    }
+
+    private String selectedUserId() {
+        return sessionUserId;
+    }
 
     private void clearAll() {
         taInput.setText(""); taDetection.setText(""); taFiltered.setText("");
