@@ -230,7 +230,7 @@ public class MainFrame extends JFrame {
         centerTabs = new JTabbedPane();
         centerTabs.addTab("Governance", buildMainPanel());
         if (GovernanceEngine.ROLE_ADMIN.equals(selectedRole())) {
-            centerTabs.addTab("Logs", new LogViewerPanel());
+            centerTabs.addTab("Admin Dashboard", new AdminDashboard());
         }
         centerTabs.setBackground(CLR_PANEL);
         centerTabs.setForeground(CLR_TEXT);
@@ -474,12 +474,12 @@ public class MainFrame extends JFrame {
         }
 
         if (centerTabs != null) {
-            int logsIndex = centerTabs.indexOfTab("Logs");
-            if (isAdmin && logsIndex < 0) {
-                centerTabs.addTab("Logs", new LogViewerPanel());
+            int adminIndex = centerTabs.indexOfTab("Admin Dashboard");
+            if (isAdmin && adminIndex < 0) {
+                centerTabs.addTab("Admin Dashboard", new AdminDashboard());
             }
-            if (!isAdmin && logsIndex >= 0) {
-                centerTabs.removeTabAt(logsIndex);
+            if (!isAdmin && adminIndex >= 0) {
+                centerTabs.removeTabAt(adminIndex);
             }
         }
 

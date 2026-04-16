@@ -14,6 +14,7 @@ public class Prompt {
     private String compressedText;
     private String originalHash;
     private String decompressedHash;
+    private String status;
     private String timestamp;
 
     // ── Constructors ──────────────────────────────────────────────────────────
@@ -56,6 +57,9 @@ public class Prompt {
 
     public String getDecompressedHash()        { return decompressedHash; }
     public void setDecompressedHash(String h)  { this.decompressedHash = h; }
+
+    public String getStatus()                 { return status; }
+    public void setStatus(String status)      { this.status = status; }
 
     public String getTimestamp()               { return timestamp; }
     public void setTimestamp(String t)         { this.timestamp = t; }

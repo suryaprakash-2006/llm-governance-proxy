@@ -110,13 +110,16 @@ Create a MySQL database and user, then set these environment variables or Java s
 - `LLM_DB_HOST` / `llm.db.host` default: `localhost`
 - `LLM_DB_PORT` / `llm.db.port` default: `3306`
 - `LLM_DB_NAME` / `llm.db.name` default: `llm_governance`
-- `LLM_DB_USER` / `llm.db.user` default: `root`
+- `LLM_DB_USER` / `llm.db.user` default: `llm_app`
 - `LLM_DB_PASSWORD` / `llm.db.password` default: empty
 
 Example:
 
 ```sql
 CREATE DATABASE llm_governance CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'llm_app'@'localhost' IDENTIFIED BY 'StrongPass123!';
+GRANT ALL PRIVILEGES ON llm_governance.* TO 'llm_app'@'localhost';
+FLUSH PRIVILEGES;
 ```
 
 ### Login Credentials (Default)

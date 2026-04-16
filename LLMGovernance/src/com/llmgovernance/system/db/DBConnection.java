@@ -32,7 +32,7 @@ public class DBConnection {
     private static final String DEFAULT_HOST = "localhost";
     private static final String DEFAULT_PORT = "3306";
     private static final String DEFAULT_DB_NAME = "llm_governance";
-    private static final String DEFAULT_USER = "root";
+    private static final String DEFAULT_USER = "llm_app";
     private static final String DEFAULT_PASSWORD = "";
 
     private static final String DB_HOST = resolveSetting("LLM_DB_HOST", "llm.db.host", DEFAULT_HOST);
@@ -79,6 +79,7 @@ public class DBConnection {
                         + "compressed_text TEXT,"
                         + "original_hash TEXT,"
                         + "decompressed_hash TEXT,"
+                        + "status VARCHAR(20) DEFAULT 'ALLOWED',"
                         + "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
                         + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 
@@ -93,12 +94,23 @@ public class DBConnection {
                         + "FOREIGN KEY(user_id) REFERENCES users(id)"
                         + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 
+        final String createPolicies =
+                "CREATE TABLE IF NOT EXISTS policies ("
+                        + "id BIGINT PRIMARY KEY AUTO_INCREMENT,"
+                        + "keyword VARCHAR(100) NOT NULL,"
+                        + "action VARCHAR(20) NOT NULL DEFAULT 'BLOCK',"
+                        + "description TEXT,"
+                        + "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+                        + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+
         try (Connection conn = getConnection();
              Statement st = conn.createStatement()) {
             st.executeUpdate(createUsers);
             st.executeUpdate(createPrompts);
             st.executeUpdate(createLogs);
+            st.executeUpdate(createPolicies);
             seedDefaultUsers(conn);
+            seedDefaultPolicies(conn);
         } catch (SQLException e) {
             LOG.warning("Schema init error: " + e.getMessage());
         }
@@ -107,6 +119,36 @@ public class DBConnection {
     private void seedDefaultUsers(Connection conn) throws SQLException {
         ensureDefaultUser(conn, "admin", "admin123", "ADMIN");
         ensureDefaultUser(conn, "user", "user123", "USER");
+    }
+
+    private void seedDefaultPolicies(Connection conn) throws SQLException {
+        ensureDefaultPolicy(conn, "password", "BLOCK", "Sensitive - block password-related prompts");
+        ensureDefaultPolicy(conn, "hack", "BLOCK", "Suspicious - block hacking attempts");
+        ensureDefaultPolicy(conn, "bypass", "BLOCK", "Suspicious - block bypass attempts");
+        ensureDefaultPolicy(conn, "token", "MASK", "Sensitive - mask token references");
+        ensureDefaultPolicy(conn, "secret", "BLOCK", "Sensitive - block secret-related prompts");
+    }
+
+    private void ensureDefaultPolicy(Connection conn, String keyword, String action, String description) throws SQLException {
+        String existsSql = "SELECT 1 FROM policies WHERE lower(keyword)=lower(?) LIMIT 1";
+        try (PreparedStatement ps = conn.prepareStatement(existsSql)) {
+            ps.setString(1, keyword);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return;
+                }
+            }
+        }
+
+        String insertSql = "INSERT INTO policies(keyword, action, description, created_at) VALUES (?, ?, ?, ?)";
+        try (PreparedStatement ps = conn.prepareStatement(insertSql)) {
+            ps.setString(1, keyword);
+            ps.setString(2, action);
+            ps.setString(3, description);
+            ps.setString(4, now());
+            ps.executeUpdate();
+        }
+        LOG.info("Seeded default policy: " + keyword + " -> " + action);
     }
 
     private void ensureDefaultUser(Connection conn, String username, String password, String role) throws SQLException {
@@ -139,7 +181,21 @@ public class DBConnection {
 
     public Connection getConnection() throws SQLException {
         ensureMySqlDriver();
-        return DriverManager.getConnection(JDBC_URL, DB_USER, DB_PASSWORD);
+        try {
+            return DriverManager.getConnection(JDBC_URL, DB_USER, DB_PASSWORD);
+        } catch (SQLException primary) {
+            // Common local Docker setup uses root/root; retry once when password was not provided.
+            if ((DB_PASSWORD == null || DB_PASSWORD.isBlank()) && isAccessDenied(primary)) {
+                LOG.warning("MySQL access denied with empty password. Retrying with fallback password for local setup.");
+                return DriverManager.getConnection(JDBC_URL, DB_USER, "root");
+            }
+            throw primary;
+        }
+    }
+
+    private boolean isAccessDenied(SQLException ex) {
+        String msg = ex.getMessage();
+        return msg != null && msg.toLowerCase().contains("access denied");
     }
 
     private synchronized void ensureMySqlDriver() throws SQLException {

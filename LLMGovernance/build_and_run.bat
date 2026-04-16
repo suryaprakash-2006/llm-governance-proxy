@@ -91,9 +91,29 @@ if %ERRORLEVEL% NEQ 0 (
 echo [OK] Compilation successful.
 echo.
 
+:: ── MySQL connection settings ─────────────────────────────────
+if "%LLM_DB_HOST%"=="" set "LLM_DB_HOST=localhost"
+if "%LLM_DB_PORT%"=="" set "LLM_DB_PORT=3306"
+if "%LLM_DB_NAME%"=="" set "LLM_DB_NAME=llm_governance"
+
+if "%LLM_DB_USER%"=="" (
+    set /p LLM_DB_USER=Enter MySQL username [llm_app]: 
+    if "%LLM_DB_USER%"=="" set "LLM_DB_USER=llm_app"
+)
+
+if "%LLM_DB_PASSWORD%"=="" (
+    set /p LLM_DB_PASSWORD=Enter MySQL password for user %LLM_DB_USER%: 
+)
+
+if "%LLM_DEMO_MODE%"=="" set "LLM_DEMO_MODE=true"
+
+echo [DB] Host=%LLM_DB_HOST% Port=%LLM_DB_PORT% DB=%LLM_DB_NAME% User=%LLM_DB_USER%
+echo [DEMO] LLM_DEMO_MODE=%LLM_DEMO_MODE%
+echo.
+
 :: ── Run ───────────────────────────────────────────────────────
 echo [3/3] Launching application...
 echo.
-java -cp "%OUT_DIR%;%LIB_DIR%\*" %MAIN_CLASS%
+java -Dllm.db.host=%LLM_DB_HOST% -Dllm.db.port=%LLM_DB_PORT% -Dllm.db.name=%LLM_DB_NAME% -Dllm.db.user=%LLM_DB_USER% -Dllm.db.password=%LLM_DB_PASSWORD% -Dllm.demo.mode=%LLM_DEMO_MODE% -cp "%OUT_DIR%;%LIB_DIR%\*" %MAIN_CLASS%
 
 endlocal

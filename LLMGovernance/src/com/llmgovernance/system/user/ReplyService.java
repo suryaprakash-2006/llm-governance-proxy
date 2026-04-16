@@ -173,6 +173,7 @@ public class ReplyService {
             result.originalHash, "", DBConnection.getInstance().now());
         prompt.setUserId(effectiveUserId);
         prompt.setUserRole(effectiveRole);
+        prompt.setStatus(governanceInput.blocked ? "BLOCKED" : "ALLOWED");
         result.savedId = dao.savePrompt(prompt);
 
         LOG.info("Request processed. Record ID=" + result.savedId

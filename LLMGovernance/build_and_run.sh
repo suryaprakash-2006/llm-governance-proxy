@@ -87,7 +87,35 @@ fi
 echo "[OK] Compilation successful."
 echo
 
+# ── MySQL connection settings ─────────────────────────────────
+LLM_DB_HOST="${LLM_DB_HOST:-localhost}"
+LLM_DB_PORT="${LLM_DB_PORT:-3306}"
+LLM_DB_NAME="${LLM_DB_NAME:-llm_governance}"
+
+if [ -z "$LLM_DB_USER" ]; then
+        read -r -p "Enter MySQL username [llm_app]: " LLM_DB_USER
+        LLM_DB_USER="${LLM_DB_USER:-llm_app}"
+fi
+
+if [ -z "$LLM_DB_PASSWORD" ]; then
+        read -r -s -p "Enter MySQL password for user $LLM_DB_USER: " LLM_DB_PASSWORD
+        echo
+fi
+
+LLM_DEMO_MODE="${LLM_DEMO_MODE:-true}"
+
+echo "[DB] Host=$LLM_DB_HOST Port=$LLM_DB_PORT DB=$LLM_DB_NAME User=$LLM_DB_USER"
+echo "[DEMO] LLM_DEMO_MODE=$LLM_DEMO_MODE"
+echo
+
 # ── Run ───────────────────────────────────────────────────────
 echo "[3/3] Launching application..."
 echo
-java -cp "$OUT_DIR:$LIB_DIR/*" "$MAIN_CLASS"
+java \
+    -Dllm.db.host="$LLM_DB_HOST" \
+    -Dllm.db.port="$LLM_DB_PORT" \
+    -Dllm.db.name="$LLM_DB_NAME" \
+    -Dllm.db.user="$LLM_DB_USER" \
+    -Dllm.db.password="$LLM_DB_PASSWORD" \
+    -Dllm.demo.mode="$LLM_DEMO_MODE" \
+    -cp "$OUT_DIR:$LIB_DIR/*" "$MAIN_CLASS"

@@ -2,6 +2,8 @@ package com.llmgovernance.system.ui;
 
 import com.llmgovernance.system.model.UserSession;
 import com.llmgovernance.system.user.AuthService;
+import com.llmgovernance.system.user.AuthService.LoginResult;
+import com.llmgovernance.system.user.AuthService.LoginStatus;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -60,7 +62,11 @@ public class LoginFrame extends JFrame {
         JButton btnLogin = new JButton("Login");
         btnLogin.addActionListener(e -> tryLogin());
 
+        JButton btnRegister = new JButton("Register");
+        btnRegister.addActionListener(e -> openRegistration());
+
         buttonRow.add(btnLogin);
+        buttonRow.add(btnRegister);
 
         lblError.setForeground(new Color(180, 25, 25));
         south.add(lblError, BorderLayout.NORTH);
@@ -78,16 +84,34 @@ public class LoginFrame extends JFrame {
         String username = tfUsername.getText() == null ? "" : tfUsername.getText().trim();
         String password = new String(pfPassword.getPassword());
 
-        UserSession session = authService.authenticate(username, password);
-        if (session == null) {
-            lblError.setText("Invalid credentials");
+        LoginResult result = authService.authenticateDetailed(username, password);
+        if (result.getStatus() == LoginStatus.DB_ERROR) {
+            lblError.setText(result.getMessage());
+            JOptionPane.showMessageDialog(
+                    this,
+                    result.getMessage() + "\n\nSet LLM_DB_USER and LLM_DB_PASSWORD for your MySQL server.",
+                    "Database Connection Error",
+                    JOptionPane.ERROR_MESSAGE
+            );
+            return;
+        }
+
+        if (result.getStatus() != LoginStatus.SUCCESS) {
+            lblError.setText(result.getMessage());
             pfPassword.selectAll();
             pfPassword.requestFocusInWindow();
             return;
         }
 
+        UserSession session = result.getSession();
+
         MainFrame frame = new MainFrame(session.getUsername(), session.getRole());
         frame.setVisible(true);
         dispose();
+    }
+
+    private void openRegistration() {
+        RegistrationFrame regFrame = new RegistrationFrame();
+        regFrame.setVisible(true);
     }
 }

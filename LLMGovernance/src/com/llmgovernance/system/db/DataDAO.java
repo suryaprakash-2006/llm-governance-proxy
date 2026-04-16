@@ -51,6 +51,37 @@ public class DataDAO {
         }
     }
 
+    public enum RegisterStatus {
+        SUCCESS,
+        USER_EXISTS,
+        INVALID_INPUT,
+        DB_ERROR
+    }
+
+    public static class RegisterResult {
+        private final RegisterStatus status;
+        private final int userId;
+        private final String message;
+
+        public RegisterResult(RegisterStatus status, int userId, String message) {
+            this.status = status;
+            this.userId = userId;
+            this.message = message;
+        }
+
+        public RegisterStatus getStatus() {
+            return status;
+        }
+
+        public int getUserId() {
+            return userId;
+        }
+
+        public String getMessage() {
+            return message;
+        }
+    }
+
     // ── Save ──────────────────────────────────────────────────────────────────
 
     /**
@@ -60,8 +91,8 @@ public class DataDAO {
     public int savePrompt(Prompt prompt) {
         String sql = "INSERT INTO prompts("
                 + "user_id, user_role, original_text, filtered_text, compressed_text, "
-                + "original_hash, decompressed_hash, created_at"
-                + ") VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+            + "original_hash, decompressed_hash, status, created_at"
+            + ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         try (Connection conn = db.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
@@ -73,7 +104,8 @@ public class DataDAO {
             ps.setString(5, safe(prompt.getCompressedText(), ""));
             ps.setString(6, safe(prompt.getOriginalHash(), ""));
             ps.setString(7, safe(prompt.getDecompressedHash(), ""));
-            ps.setString(8, safe(prompt.getTimestamp(), db.now()));
+            ps.setString(8, safe(prompt.getStatus(), "ALLOWED"));
+            ps.setString(9, safe(prompt.getTimestamp(), db.now()));
             ps.executeUpdate();
 
             try (ResultSet keys = ps.getGeneratedKeys()) {
@@ -100,7 +132,7 @@ public class DataDAO {
     public List<Prompt> loadAll() {
         List<Prompt> list = new ArrayList<>();
         String sql = "SELECT id, user_id, user_role, original_text, filtered_text, compressed_text, "
-                + "original_hash, decompressed_hash, created_at "
+            + "original_hash, decompressed_hash, status, created_at "
                 + "FROM prompts ORDER BY id DESC";
 
         try (Connection conn = db.getConnection();
@@ -117,6 +149,7 @@ public class DataDAO {
                 p.setCompressedText(rs.getString("compressed_text"));
                 p.setOriginalHash(rs.getString("original_hash"));
                 p.setDecompressedHash(rs.getString("decompressed_hash"));
+                p.setStatus(rs.getString("status"));
                 p.setTimestamp(rs.getString("created_at"));
                 list.add(p);
             }
@@ -154,7 +187,7 @@ public class DataDAO {
 
     // ── User Auth Lookup ─────────────────────────────────────────────────────
 
-    public DbUser getUserByUsername(String username) {
+    public DbUser getUserByUsernameOrThrow(String username) throws SQLException {
         if (username == null || username.isBlank()) {
             return null;
         }
@@ -173,6 +206,14 @@ public class DataDAO {
                     );
                 }
             }
+        }
+
+        return null;
+    }
+
+    public DbUser getUserByUsername(String username) {
+        try {
+            return getUserByUsernameOrThrow(username);
         } catch (SQLException e) {
             LOG.warning("User lookup error: " + e.getMessage());
         }
@@ -180,7 +221,178 @@ public class DataDAO {
         return null;
     }
 
+    /**
+     * Registers a new user with the given username, password, and role.
+     * @return the new user ID, or -1 on failure.
+     */
+    public int registerUser(String username, String password, String role) {
+        RegisterResult result = registerUserDetailed(username, password, role);
+        return result.getStatus() == RegisterStatus.SUCCESS ? result.getUserId() : -1;
+    }
+
+    public RegisterResult registerUserDetailed(String username, String password, String role) {
+        if (username == null || username.isBlank() || password == null || password.isBlank()) {
+            return new RegisterResult(RegisterStatus.INVALID_INPUT, -1, "Username and password are required.");
+        }
+
+        String normalizedUser = username.trim();
+        String normalizedRole = role == null ? "USER" : role.trim().toUpperCase();
+        if (!"ADMIN".equals(normalizedRole) && !"USER".equals(normalizedRole)) {
+            normalizedRole = "USER";
+        }
+
+        final String existsSql = "SELECT 1 FROM users WHERE lower(username)=lower(?) LIMIT 1";
+        final String insertSql = "INSERT INTO users(username, password, role, created_at) VALUES (?, ?, ?, ?)";
+
+        try (Connection conn = db.getConnection()) {
+            try (PreparedStatement existsPs = conn.prepareStatement(existsSql)) {
+                existsPs.setString(1, normalizedUser);
+                try (ResultSet rs = existsPs.executeQuery()) {
+                    if (rs.next()) {
+                        return new RegisterResult(RegisterStatus.USER_EXISTS, -1, "Username already taken");
+                    }
+                }
+            }
+
+            try (PreparedStatement insertPs = conn.prepareStatement(insertSql, Statement.RETURN_GENERATED_KEYS)) {
+                insertPs.setString(1, normalizedUser);
+                insertPs.setString(2, password);
+                insertPs.setString(3, normalizedRole);
+                insertPs.setString(4, db.now());
+                insertPs.executeUpdate();
+
+                try (ResultSet keys = insertPs.getGeneratedKeys()) {
+                    if (keys.next()) {
+                        int id = keys.getInt(1);
+                        LOG.info("Registered new user: " + normalizedUser + " with ID=" + id);
+                        return new RegisterResult(RegisterStatus.SUCCESS, id, "Registration successful");
+                    }
+                }
+            }
+
+            return new RegisterResult(RegisterStatus.DB_ERROR, -1, "Registration failed. No generated key returned.");
+        } catch (SQLException e) {
+            String message = e.getMessage() == null ? "Database error" : e.getMessage();
+            LOG.warning("Register user error: " + message);
+            if (message.toLowerCase().contains("access denied")) {
+                message = "Database access denied. Please verify MySQL username/password.";
+            }
+            return new RegisterResult(RegisterStatus.DB_ERROR, -1, message);
+        }
+    }
+
     private String safe(String value, String fallback) {
         return value == null ? fallback : value;
     }
+
+    // ── Policy Management ──────────────────────────────────────────────────────
+
+    /**
+     * Saves a new policy rule to the policies table.
+     */
+    public int savePolicy(com.llmgovernance.system.model.Policy policy) {
+        String sql = "INSERT INTO policies(keyword, action, description, created_at) VALUES (?, ?, ?, ?)";
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            ps.setString(1, safe(policy.getKeyword(), ""));
+            ps.setString(2, safe(policy.getAction(), "BLOCK"));
+            ps.setString(3, safe(policy.getDescription(), ""));
+            ps.setString(4, safe(policy.getCreatedAt(), db.now()));
+            ps.executeUpdate();
+
+            try (ResultSet keys = ps.getGeneratedKeys()) {
+                if (keys.next()) {
+                    int id = keys.getInt(1);
+                    policy.setId(id);
+                    LOG.info("Saved policy ID=" + id);
+                    return id;
+                }
+            }
+            return -1;
+        } catch (SQLException e) {
+            LOG.warning("Save policy error: " + e.getMessage());
+            return -1;
+        }
+    }
+
+    /**
+     * Loads all policy rules.
+     */
+    public List<com.llmgovernance.system.model.Policy> loadAllPolicies() {
+        List<com.llmgovernance.system.model.Policy> list = new ArrayList<>();
+        String sql = "SELECT id, keyword, action, description, created_at FROM policies ORDER BY id ASC";
+
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+
+            while (rs.next()) {
+                com.llmgovernance.system.model.Policy p = new com.llmgovernance.system.model.Policy();
+                p.setId(rs.getInt("id"));
+                p.setKeyword(rs.getString("keyword"));
+                p.setAction(rs.getString("action"));
+                p.setDescription(rs.getString("description"));
+                p.setCreatedAt(rs.getString("created_at"));
+                list.add(p);
+            }
+        } catch (SQLException e) {
+            LOG.warning("Load policies error: " + e.getMessage());
+        }
+        return list;
+    }
+
+    /**
+     * Updates an existing policy rule.
+     */
+    public boolean updatePolicy(com.llmgovernance.system.model.Policy policy) {
+        String sql = "UPDATE policies SET keyword=?, action=?, description=? WHERE id=?";
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, safe(policy.getKeyword(), ""));
+            ps.setString(2, safe(policy.getAction(), "BLOCK"));
+            ps.setString(3, safe(policy.getDescription(), ""));
+            ps.setInt(4, policy.getId());
+            int rowsAffected = ps.executeUpdate();
+            LOG.info("Updated policy ID=" + policy.getId() + " (" + rowsAffected + " rows)");
+            return rowsAffected > 0;
+        } catch (SQLException e) {
+            LOG.warning("Update policy error: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Deletes a policy rule by ID.
+     */
+    public boolean deletePolicy(int policyId) {
+        String sql = "DELETE FROM policies WHERE id=?";
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, policyId);
+            int rowsAffected = ps.executeUpdate();
+            LOG.info("Deleted policy ID=" + policyId + " (" + rowsAffected + " rows)");
+            return rowsAffected > 0;
+        } catch (SQLException e) {
+            LOG.warning("Delete policy error: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Gets policy count for admin dashboard.
+     */
+    public int getPolicyCount() {
+        String sql = "SELECT COUNT(1) FROM policies";
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            if (rs.next()) {
+                return rs.getInt(1);
+            }
+        } catch (SQLException e) {
+            LOG.warning("Count policies error: " + e.getMessage());
+        }
+        return 0;
+    }
 }
+
