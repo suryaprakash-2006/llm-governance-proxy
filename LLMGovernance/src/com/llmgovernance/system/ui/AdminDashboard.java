@@ -87,6 +87,15 @@ public class AdminDashboard extends JTabbedPane {
     private void loadLogs() {
         List<Prompt> prompts = dao.loadAll();
         String[] columns = {"ID", "User", "Role", "Status", "Hash (first 16)", "Timestamp"};
+
+        if (prompts.isEmpty()) {
+            Object[][] emptyData = {{"-", "No records found", "-", "-", "-", "Run Analyze to create logs"}};
+            tblLogs.setModel(new DefaultTableModel(emptyData, columns) {
+                @Override public boolean isCellEditable(int row, int col) { return false; }
+            });
+            return;
+        }
+
         Object[][] data = new Object[prompts.size()][6];
 
         for (int i = 0; i < prompts.size(); i++) {
@@ -149,6 +158,15 @@ public class AdminDashboard extends JTabbedPane {
                 .filter(p -> "BLOCKED".equalsIgnoreCase(p.getStatus()))
                 .toList();
         String[] columns = {"ID", "User", "Original Text (first 50)", "Timestamp"};
+
+        if (prompts.isEmpty()) {
+            Object[][] emptyData = {{"-", "No blocked prompts", "-", "No blocked records yet"}};
+            tblBlockedPrompts.setModel(new DefaultTableModel(emptyData, columns) {
+                @Override public boolean isCellEditable(int row, int col) { return false; }
+            });
+            return;
+        }
+
         Object[][] data = new Object[prompts.size()][4];
 
         for (int count = 0; count < prompts.size(); count++) {
