@@ -26,12 +26,18 @@ public class DataDAO {
         private final String username;
         private final String password;
         private final String role;
+        private final String createdAt;
 
         public DbUser(int id, String username, String password, String role) {
+            this(id, username, password, role, null);
+        }
+
+        public DbUser(int id, String username, String password, String role, String createdAt) {
             this.id = id;
             this.username = username;
             this.password = password;
             this.role = role;
+            this.createdAt = createdAt;
         }
 
         public int getId() {
@@ -48,6 +54,10 @@ public class DataDAO {
 
         public String getRole() {
             return role;
+        }
+
+        public String getCreatedAt() {
+            return createdAt;
         }
     }
 
@@ -186,6 +196,29 @@ public class DataDAO {
     }
 
     // ── User Auth Lookup ─────────────────────────────────────────────────────
+
+    public List<DbUser> loadAllUsers() {
+        List<DbUser> users = new ArrayList<>();
+        String sql = "SELECT id, username, password, role, created_at FROM users ORDER BY id ASC";
+
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                users.add(new DbUser(
+                        rs.getInt("id"),
+                        rs.getString("username"),
+                        rs.getString("password"),
+                        rs.getString("role"),
+                        rs.getString("created_at")
+                ));
+            }
+        } catch (SQLException e) {
+            LOG.warning("Load users error: " + e.getMessage());
+        }
+
+        return users;
+    }
 
     public DbUser getUserByUsernameOrThrow(String username) throws SQLException {
         if (username == null || username.isBlank()) {

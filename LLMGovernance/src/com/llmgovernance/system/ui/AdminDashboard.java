@@ -369,18 +369,17 @@ public class AdminDashboard extends JTabbedPane {
     }
 
     private void loadUsers() {
-        List<Prompt> prompts = dao.loadAll();
-        String[] columns = {"ID", "Username", "Role", "Status", "Timestamp"};
-        Object[][] data = new Object[prompts.size()][5];
+        List<DataDAO.DbUser> users = dao.loadAllUsers();
+        String[] columns = {"ID", "Username", "Role", "Created At"};
+        Object[][] data = new Object[users.size()][4];
 
-        for (int i = 0; i < prompts.size(); i++) {
-            Prompt p = prompts.get(i);
+        for (int i = 0; i < users.size(); i++) {
+            DataDAO.DbUser user = users.get(i);
             data[i] = new Object[]{
-                    p.getId(),
-                    p.getUserId(),
-                    p.getUserRole(),
-                    p.getStatus() == null ? "ALLOWED" : p.getStatus(),
-                    p.getTimestamp()
+                    user.getId(),
+                    user.getUsername(),
+                    user.getRole(),
+                    user.getCreatedAt()
             };
         }
 
