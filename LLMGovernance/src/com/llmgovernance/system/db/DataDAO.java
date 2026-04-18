@@ -61,6 +61,34 @@ public class DataDAO {
         }
     }
 
+    public static class LogRecord {
+        private final int id;
+        private final Long userId;
+        private final String username;
+        private final String prompt;
+        private final String response;
+        private final String status;
+        private final String timestamp;
+
+        public LogRecord(int id, Long userId, String username, String prompt, String response, String status, String timestamp) {
+            this.id = id;
+            this.userId = userId;
+            this.username = username;
+            this.prompt = prompt;
+            this.response = response;
+            this.status = status;
+            this.timestamp = timestamp;
+        }
+
+        public int getId() { return id; }
+        public Long getUserId() { return userId; }
+        public String getUsername() { return username; }
+        public String getPrompt() { return prompt; }
+        public String getResponse() { return response; }
+        public String getStatus() { return status; }
+        public String getTimestamp() { return timestamp; }
+    }
+
     public enum RegisterStatus {
         SUCCESS,
         USER_EXISTS,
@@ -134,6 +162,41 @@ public class DataDAO {
         }
     }
 
+    public int saveBlockedPrompt(Prompt prompt) {
+        String sql = "INSERT INTO blocked_prompts("
+                + "user_id, user_role, original_text, filtered_text, compressed_text, "
+                + "original_hash, decompressed_hash, status, created_at"
+                + ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+
+            ps.setString(1, safe(prompt.getUserId(), "anonymous"));
+            ps.setString(2, safe(prompt.getUserRole(), "USER"));
+            ps.setString(3, safe(prompt.getOriginalText(), ""));
+            ps.setString(4, safe(prompt.getFilteredText(), ""));
+            ps.setString(5, safe(prompt.getCompressedText(), ""));
+            ps.setString(6, safe(prompt.getOriginalHash(), ""));
+            ps.setString(7, safe(prompt.getDecompressedHash(), ""));
+            ps.setString(8, safe(prompt.getStatus(), "BLOCKED"));
+            ps.setString(9, safe(prompt.getTimestamp(), db.now()));
+            ps.executeUpdate();
+
+            try (ResultSet keys = ps.getGeneratedKeys()) {
+                if (keys.next()) {
+                    int id = keys.getInt(1);
+                    LOG.info("Saved blocked prompt ID=" + id);
+                    return id;
+                }
+            }
+            return -1;
+
+        } catch (SQLException e) {
+            LOG.warning("Save blocked prompt error: " + e.getMessage());
+            return -1;
+        }
+    }
+
     // ── Load All ──────────────────────────────────────────────────────────────
 
     /**
@@ -169,6 +232,35 @@ public class DataDAO {
         return list;
     }
 
+    public List<Prompt> loadAllBlockedPrompts() {
+        List<Prompt> list = new ArrayList<>();
+        String sql = "SELECT id, user_id, user_role, original_text, filtered_text, compressed_text, "
+                + "original_hash, decompressed_hash, status, created_at "
+                + "FROM blocked_prompts ORDER BY id DESC";
+
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                Prompt p = new Prompt();
+                p.setId(rs.getInt("id"));
+                p.setUserId(rs.getString("user_id"));
+                p.setUserRole(rs.getString("user_role"));
+                p.setOriginalText(rs.getString("original_text"));
+                p.setFilteredText(rs.getString("filtered_text"));
+                p.setCompressedText(rs.getString("compressed_text"));
+                p.setOriginalHash(rs.getString("original_hash"));
+                p.setDecompressedHash(rs.getString("decompressed_hash"));
+                p.setStatus(rs.getString("status"));
+                p.setTimestamp(rs.getString("created_at"));
+                list.add(p);
+            }
+        } catch (SQLException e) {
+            LOG.warning("Load blocked prompts error: " + e.getMessage());
+        }
+        return list;
+    }
+
     // ── Load by ID ────────────────────────────────────────────────────────────
 
     public Prompt loadById(int id) {
@@ -193,6 +285,64 @@ public class DataDAO {
             LOG.warning("Count error: " + e.getMessage());
         }
         return 0;
+    }
+
+    public int saveLogEntry(Long userId, String prompt, String response, String status) {
+        String sql = "INSERT INTO logs(user_id, prompt, response, status, timestamp) VALUES (?, ?, ?, ?, ?)";
+
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            if (userId == null) {
+                ps.setNull(1, java.sql.Types.BIGINT);
+            } else {
+                ps.setLong(1, userId);
+            }
+            ps.setString(2, safe(prompt, ""));
+            ps.setString(3, safe(response, ""));
+            ps.setString(4, safe(status, "ALLOWED"));
+            ps.setString(5, db.now());
+            ps.executeUpdate();
+
+            try (ResultSet keys = ps.getGeneratedKeys()) {
+                if (keys.next()) {
+                    int id = keys.getInt(1);
+                    LOG.info("Saved log ID=" + id);
+                    return id;
+                }
+            }
+            return -1;
+        } catch (SQLException e) {
+            LOG.warning("Save log error: " + e.getMessage());
+            return -1;
+        }
+    }
+
+    public List<LogRecord> loadAllLogs() {
+        List<LogRecord> list = new ArrayList<>();
+        String sql = "SELECT l.id, l.user_id, COALESCE(u.username, 'anonymous') AS username, "
+                + "l.prompt, l.response, l.status, l.timestamp "
+                + "FROM logs l LEFT JOIN users u ON l.user_id = u.id ORDER BY l.id DESC";
+
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                Long userId = rs.getObject("user_id") == null ? null : rs.getLong("user_id");
+                list.add(new LogRecord(
+                        rs.getInt("id"),
+                        userId,
+                        rs.getString("username"),
+                        rs.getString("prompt"),
+                        rs.getString("response"),
+                        rs.getString("status"),
+                        rs.getString("timestamp")
+                ));
+            }
+        } catch (SQLException e) {
+            LOG.warning("Load logs error: " + e.getMessage());
+        }
+
+        return list;
     }
 
     // ── User Auth Lookup ─────────────────────────────────────────────────────

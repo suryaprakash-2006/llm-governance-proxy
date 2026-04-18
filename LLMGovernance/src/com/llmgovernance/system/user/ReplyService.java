@@ -176,7 +176,19 @@ public class ReplyService {
         prompt.setStatus(governanceInput.blocked ? "BLOCKED" : "ALLOWED");
         result.savedId = dao.savePrompt(prompt);
 
+        int blockedId = -1;
+        if (governanceInput.blocked) {
+            blockedId = dao.saveBlockedPrompt(prompt);
+        }
+
+        DataDAO.DbUser dbUser = dao.getUserByUsername(effectiveUserId);
+        Long logUserId = dbUser == null ? null : (long) dbUser.getId();
+        int logId = dao.saveLogEntry(logUserId, inputText, result.llmResponse,
+                governanceInput.blocked ? "BLOCKED" : "ALLOWED");
+
         LOG.info("Request processed. Record ID=" + result.savedId
+            + ", blockedId=" + blockedId
+            + ", logId=" + logId
             + ", llmCalled=" + result.llmCalled
             + ", blocked=" + governanceInput.blocked);
 

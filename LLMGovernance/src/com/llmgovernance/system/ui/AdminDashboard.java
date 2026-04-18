@@ -85,32 +85,32 @@ public class AdminDashboard extends JTabbedPane {
     }
 
     private void loadLogs() {
-        List<Prompt> prompts = dao.loadAll();
-        String[] columns = {"ID", "User", "Role", "Status", "Hash (first 16)", "Timestamp"};
+        List<DataDAO.LogRecord> logs = dao.loadAllLogs();
+        String[] columns = {"ID", "User", "Status", "Prompt", "Response", "Timestamp"};
 
-        if (prompts.isEmpty()) {
-            Object[][] emptyData = {{"-", "No records found", "-", "-", "-", "Run Analyze to create logs"}};
+        if (logs.isEmpty()) {
+            Object[][] emptyData = {{"-", "No audit logs found", "-", "-", "-", "Run Analyze to create logs"}};
             tblLogs.setModel(new DefaultTableModel(emptyData, columns) {
                 @Override public boolean isCellEditable(int row, int col) { return false; }
             });
             return;
         }
 
-        Object[][] data = new Object[prompts.size()][6];
+        Object[][] data = new Object[logs.size()][6];
 
-        for (int i = 0; i < prompts.size(); i++) {
-            Prompt p = prompts.get(i);
-            String hash = p.getOriginalHash();
-            if (hash != null && hash.length() >= 16) {
-                hash = hash.substring(0, 16) + "…";
+        for (int i = 0; i < logs.size(); i++) {
+            DataDAO.LogRecord log = logs.get(i);
+            String prompt = log.getPrompt();
+            if (prompt != null && prompt.length() > 48) {
+                prompt = prompt.substring(0, 48) + "…";
             }
             data[i] = new Object[]{
-                    p.getId(),
-                    p.getUserId(),
-                    p.getUserRole(),
-                    p.getStatus() == null ? "ALLOWED" : p.getStatus(),
-                    hash,
-                    p.getTimestamp()
+                    log.getId(),
+                    log.getUsername(),
+                    log.getStatus(),
+                    prompt,
+                    log.getResponse(),
+                    log.getTimestamp()
             };
         }
 
@@ -153,10 +153,7 @@ public class AdminDashboard extends JTabbedPane {
     }
 
     private void loadBlockedPrompts() {
-        List<Prompt> prompts = dao.loadAll();
-        prompts = prompts.stream()
-                .filter(p -> "BLOCKED".equalsIgnoreCase(p.getStatus()))
-                .toList();
+        List<Prompt> prompts = dao.loadAllBlockedPrompts();
         String[] columns = {"ID", "User", "Original Text (first 50)", "Timestamp"};
 
         if (prompts.isEmpty()) {

@@ -83,6 +83,20 @@ public class DBConnection {
                         + "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
                         + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 
+                final String createBlockedPrompts =
+                    "CREATE TABLE IF NOT EXISTS blocked_prompts ("
+                        + "id BIGINT PRIMARY KEY AUTO_INCREMENT,"
+                        + "user_id VARCHAR(50) NOT NULL,"
+                        + "user_role VARCHAR(20) NOT NULL,"
+                        + "original_text TEXT,"
+                        + "filtered_text TEXT,"
+                        + "compressed_text TEXT,"
+                        + "original_hash TEXT,"
+                        + "decompressed_hash TEXT,"
+                        + "status VARCHAR(20) DEFAULT 'BLOCKED',"
+                        + "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+                        + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+
         final String createLogs =
                 "CREATE TABLE IF NOT EXISTS logs ("
                         + "id BIGINT PRIMARY KEY AUTO_INCREMENT,"
@@ -107,6 +121,7 @@ public class DBConnection {
              Statement st = conn.createStatement()) {
             st.executeUpdate(createUsers);
             st.executeUpdate(createPrompts);
+            st.executeUpdate(createBlockedPrompts);
             st.executeUpdate(createLogs);
             st.executeUpdate(createPolicies);
             seedDefaultUsers(conn);
